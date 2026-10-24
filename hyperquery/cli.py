@@ -128,11 +128,19 @@ def run_benchmark(iterations: int = 50000) -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def cmd_server(host: str, port: int, data_dir: str) -> None:
-    """Run Redis-compatible (RESP) TCP socket server."""
+def cmd_server(host: str, port: int, data_dir: str, web_port: int | None = None) -> None:
+    """Run Redis-compatible (RESP) TCP socket server with optional embedded Web Dashboard."""
     import asyncio
+    import threading
     from hyperquery.server import HyperQueryServer
+    from hyperquery.web import run_web_dashboard
+
     engine = LSMTreeEngine(data_dir=data_dir)
+
+    if web_port:
+        th = threading.Thread(target=run_web_dashboard, args=(engine, web_port, host), daemon=True)
+        th.start()
+
     server = HyperQueryServer(engine=engine, host=host, port=port)
     try:
         asyncio.run(server.start())
@@ -152,14 +160,24 @@ def main() -> None:
     server_parser = subparsers.add_parser("server", help="Run Redis-compatible (RESP) TCP server")
     server_parser.add_argument("--host", default="0.0.0.0", help="Binding host address")
     server_parser.add_argument("--port", type=int, default=6379, help="Binding port (default: 6379)")
+    server_parser.add_argument("--web-port", type=int, default=6380, help="Optional embedded HTTP dashboard port (default: 6380)")
     server_parser.add_argument("--data", default="./lsm_data", help="Directory for WAL and SSTables")
 
     bench_parser = subparsers.add_parser("bench", help="Run LSM engine microsecond benchmark suite")
     bench_parser.add_argument("-n", "--iterations", type=int, default=50000, help="Number of benchmark iterations")
 
+    dashboard_parser = subparsers.add_parser("dashboard", help="Run standalone web monitoring dashboard")
+    dashboard_parser.add_argument("--host", default="0.0.0.0", help="Binding host address")
+    dashboard_parser.add_argument("--port", type=int, default=6380, help="Binding port (default: 6380)")
+    dashboard_parser.add_argument("--data", default="./lsm_data", help="Directory for WAL and SSTables")
+
     args = parser.parse_args()
     if args.command == "server":
-        cmd_server(args.host, args.port, args.data)
+        cmd_server(args.host, args.port, args.data, args.web_port)
+    elif args.command == "dashboard":
+        from hyperquery.web import run_web_dashboard
+        eng = LSMTreeEngine(data_dir=args.data)
+        run_web_dashboard(eng, port=args.port, host=args.host)
     elif args.command == "bench":
         run_benchmark(iterations=args.iterations)
     else:
