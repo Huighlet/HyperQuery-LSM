@@ -2,7 +2,7 @@
 
 **Embedded Log-Structured Merge-Tree (LSM) Storage Engine with MemTable, WAL, Bloom Filter SSTables & Leveled Compaction**
 
-[![Build Status](https://img.shields.io/badge/tests-16%20passed-brightgreen.svg)](https://github.com/Huighlet/HyperQuery-LSM)
+[![Build Status](https://img.shields.io/badge/tests-19%20passed-brightgreen.svg)](https://github.com/Huighlet/HyperQuery-LSM)
 [![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Zero AI Slop](https://img.shields.io/badge/codebase-zero%20ai%20slop-black.svg)](https://github.com/Huighlet/HyperQuery-LSM)
@@ -173,24 +173,69 @@ pytest -v
 ```
 Output:
 ```
-tests/test_bloom.py::test_bloom_filter_zero_false_negatives PASSED       [  6%]
-tests/test_bloom.py::test_bloom_filter_false_positive_bound PASSED       [ 12%]
-tests/test_bloom.py::test_bloom_serialization_roundtrip PASSED           [ 18%]
-tests/test_compaction.py::test_compaction_multiway_merge_and_deduplication PASSED [ 25%]
-tests/test_engine.py::test_engine_put_get_delete PASSED                  [ 31%]
-tests/test_engine.py::test_engine_automatic_flush_to_sstable PASSED      [ 37%]
-tests/test_engine.py::test_engine_range_scan PASSED                      [ 43%]
-tests/test_engine.py::test_engine_compaction PASSED                      [ 50%]
-tests/test_skiplist.py::test_skiplist_insert_and_get PASSED              [ 56%]
-tests/test_skiplist.py::test_skiplist_update_in_place PASSED             [ 62%]
-tests/test_skiplist.py::test_skiplist_sorted_order_and_scan PASSED       [ 68%]
-tests/test_skiplist.py::test_skiplist_tombstone PASSED                   [ 75%]
-tests/test_sstable.py::test_sstable_write_and_read PASSED                [ 81%]
-tests/test_sstable.py::test_sstable_scan_range PASSED                    [ 87%]
-tests/test_wal.py::test_wal_append_and_replay PASSED                     [ 93%]
+tests/test_bloom.py::test_bloom_filter_zero_false_negatives PASSED       [  5%]
+tests/test_bloom.py::test_bloom_filter_false_positive_bound PASSED       [ 10%]
+tests/test_bloom.py::test_bloom_serialization_roundtrip PASSED           [ 15%]
+tests/test_compaction.py::test_compaction_multiway_merge_and_deduplication PASSED [ 21%]
+tests/test_engine.py::test_engine_put_get_delete PASSED                  [ 26%]
+tests/test_engine.py::test_engine_automatic_flush_to_sstable PASSED      [ 31%]
+tests/test_engine.py::test_engine_range_scan PASSED                      [ 36%]
+tests/test_engine.py::test_engine_compaction PASSED                      [ 42%]
+tests/test_server.py::test_resp_parser_serialization PASSED              [ 47%]
+tests/test_server.py::test_resp_parser_request PASSED                    [ 52%]
+tests/test_server.py::test_hyperquery_server_commands PASSED             [ 57%]
+tests/test_skiplist.py::test_skiplist_insert_and_get PASSED              [ 63%]
+tests/test_skiplist.py::test_skiplist_update_in_place PASSED             [ 68%]
+tests/test_skiplist.py::test_skiplist_sorted_order_and_scan PASSED       [ 73%]
+tests/test_skiplist.py::test_skiplist_tombstone PASSED                   [ 78%]
+tests/test_sstable.py::test_sstable_write_and_read PASSED                [ 84%]
+tests/test_sstable.py::test_sstable_scan_range PASSED                    [ 89%]
+tests/test_wal.py::test_wal_append_and_replay PASSED                     [ 94%]
 tests/test_wal.py::test_wal_corrupted_frame_detected PASSED              [100%]
 
-============================= 16 passed in 0.67s ==============================
+============================= 19 passed in 0.48s ==============================
+```
+
+### Running Standalone Redis-Compatible TCP Server
+
+Run HyperQuery as a standalone TCP server speaking the standard Redis protocol (RESP2):
+
+```bash
+hyperquery server --host 0.0.0.0 --port 6379 --data ./lsm_data
+```
+
+Connect instantly with `redis-cli` or any language client:
+
+```bash
+# Connect using standard redis-cli
+redis-cli -p 6379
+
+127.0.0.1:6379> PING
+PONG
+127.0.0.1:6379> SET user:1001 '{"name":"Kwame","role":"Dev"}'
+OK
+127.0.0.1:6379> GET user:1001
+"{\"name\":\"Kwame\",\"role\":\"Dev\"}"
+127.0.0.1:6379> INFO
+# HyperQuery-LSM Storage Engine
+engine:hyperquery-lsm
+memtable_entries:1
+memtable_bytes:54
+level0_tables:0
+level1_tables:0
+127.0.0.1:6379> DEL user:1001
+(integer) 1
+127.0.0.1:6379> GET user:1001
+(nil)
+```
+
+### Production Docker Deployment
+
+Deploy HyperQuery-LSM with Docker in one command:
+
+```bash
+docker build -t hyperquery-lsm .
+docker run -d -p 6379:6379 -v hyperquery_data:/data --name lsm_db hyperquery-lsm
 ```
 
 ### Executing Microsecond Benchmarks

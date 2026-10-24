@@ -128,6 +128,20 @@ def run_benchmark(iterations: int = 50000) -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def cmd_server(host: str, port: int, data_dir: str) -> None:
+    """Run Redis-compatible (RESP) TCP socket server."""
+    import asyncio
+    from hyperquery.server import HyperQueryServer
+    engine = LSMTreeEngine(data_dir=data_dir)
+    server = HyperQueryServer(engine=engine, host=host, port=port)
+    try:
+        asyncio.run(server.start())
+    except KeyboardInterrupt:
+        print("\nShutting down HyperQuery server...")
+        server.stop()
+        engine.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="hyperquery",
@@ -135,11 +149,18 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command")
 
+    server_parser = subparsers.add_parser("server", help="Run Redis-compatible (RESP) TCP server")
+    server_parser.add_argument("--host", default="0.0.0.0", help="Binding host address")
+    server_parser.add_argument("--port", type=int, default=6379, help="Binding port (default: 6379)")
+    server_parser.add_argument("--data", default="./lsm_data", help="Directory for WAL and SSTables")
+
     bench_parser = subparsers.add_parser("bench", help="Run LSM engine microsecond benchmark suite")
     bench_parser.add_argument("-n", "--iterations", type=int, default=50000, help="Number of benchmark iterations")
 
     args = parser.parse_args()
-    if args.command == "bench":
+    if args.command == "server":
+        cmd_server(args.host, args.port, args.data)
+    elif args.command == "bench":
         run_benchmark(iterations=args.iterations)
     else:
         parser.print_help()
