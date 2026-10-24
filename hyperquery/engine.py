@@ -6,10 +6,11 @@ Integrates MemTable, WAL, multi-level SSTables, Bloom Filters, and Compaction.
 from __future__ import annotations
 
 import collections
+import json
 from pathlib import Path
 import threading
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from hyperquery.compaction import Compactor
 from hyperquery.skiplist import SkipList
@@ -235,6 +236,61 @@ class LSMTreeEngine:
         if table.table_id not in self._readers:
             self._readers[table.table_id] = SSTableReader(table.file_path)
         return self._readers[table.table_id]
+
+    def create_snapshot(self) -> Dict[str, Any]:
+        """
+        Point-in-time state checkpoint and durability audit.
+        Flushes active MemTable to disk and persists a frozen snapshot manifest.
+        """
+        with self._lock:
+            self.flush_memtable()
+            snap_dir = self.data_dir / "snapshots"
+            snap_dir.mkdir(parents=True, exist_ok=True)
+            snap_id = f"snapshot_{int(time.time_ns())}"
+            snap_path = snap_dir / f"{snap_id}.json"
+
+            total_bytes = 0
+            total_entries = 0
+            tables_info = []
+
+            for lvl, tables in self._sstables.items():
+                for t in tables:
+                    total_bytes += t.file_size_bytes
+                    total_entries += t.entry_count
+                    tables_info.append({
+                        "table_id": t.table_id,
+                        "level": t.level,
+                        "entry_count": t.entry_count,
+                        "file_size_bytes": t.file_size_bytes,
+                    })
+
+            snapshot_data = {
+                "snapshot_id": snap_id,
+                "timestamp_ns": time.time_ns(),
+                "total_tables": len(tables_info),
+                "total_entries": total_entries,
+                "total_bytes": total_bytes,
+                "tables": tables_info,
+                "status": "DURABLE_LSM_CHECKPOINT_SAVED",
+            }
+
+            snap_path.write_text(json.dumps(snapshot_data, indent=2))
+            return snapshot_data
+
+    def list_snapshots(self) -> List[Dict[str, Any]]:
+        """List all historical point-in-time snapshots created for this engine."""
+        with self._lock:
+            snap_dir = self.data_dir / "snapshots"
+            if not snap_dir.exists():
+                return []
+            results = []
+            for f in sorted(snap_dir.glob("snapshot_*.json")):
+                try:
+                    data = json.loads(f.read_text())
+                    results.append(data)
+                except Exception:
+                    pass
+            return results
 
     def close(self) -> None:
         """Close storage engine."""
